@@ -67,9 +67,9 @@ export default function SecurityHomepage() {
       </View>
 
       {/* Daily Goal Card */}
-      <View style={styles.dailyGoalCard}>
-        <Text style={styles.dailyGoalTitle}>Daily Goal</Text>
-        <Text style={styles.dailyGoalText}>42 Visitors Logged Today</Text>
+      <View style={styles.logCard}>
+        <Text style={styles.logTitle}>Daily Log</Text>
+        <Text style={styles.logText}>42 Visitors Logged Today</Text>
       </View>
 
     </ScrollView>
@@ -195,20 +195,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  dailyGoalCard: {
+  logCard: {
     marginHorizontal: 16,
     marginTop: 16,
     backgroundColor: '#450a0a',
     borderRadius: 12,
     padding: 24,
   },
-  dailyGoalTitle: {
+  logTitle: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '500',
     marginBottom: 8,
   },
-  dailyGoalText: {
+  logText: {
     color: '#fca5a5',
     fontSize: 14,
   },
