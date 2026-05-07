@@ -21,8 +21,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const apiBaseUrl =
-    process.env.EXPO_PUBLIC_API_URL ?? 'https://campusconnectapp-lu1d.onrender.com';
+  const apiBaseUrl = 'https://campusconnectapp-lu1d.onrender.com';
 
   useEffect(() => {
     const bootstrap = async () => {

@@ -6,6 +6,7 @@ import { authenticateRequest, authorizeRoles } from "./middleware/authMiddleware
 import { sendNotification } from "./services/firebaseAdmin";
 import notificationRoutes from "./routes/notificationRoutes";
 import authRoutes from "./routes/authRoutes";
+import gatePassRoutes from "./routes/gatePassRoutes";
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/gate-passes", gatePassRoutes);
 
 app.post("/api/send-notification", async (req, res) => {
   try {

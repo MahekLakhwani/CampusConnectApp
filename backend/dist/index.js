@@ -20,6 +20,7 @@ const authMiddleware_1 = require("./middleware/authMiddleware");
 const firebaseAdmin_1 = require("./services/firebaseAdmin");
 const notificationRoutes_1 = __importDefault(require("./routes/notificationRoutes"));
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
+const gatePassRoutes_1 = __importDefault(require("./routes/gatePassRoutes"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
@@ -28,6 +29,7 @@ app.get("/", (_req, res) => {
     res.send("Server is running");
 });
 app.use("/api/auth", authRoutes_1.default);
+app.use("/api/gate-passes", gatePassRoutes_1.default);
 app.post("/api/send-notification", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         console.log("🔥 RAW BODY:", req.body);

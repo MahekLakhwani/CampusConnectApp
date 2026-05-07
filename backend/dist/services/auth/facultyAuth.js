@@ -18,6 +18,7 @@ const authenticateFaculty = (erpId, password) => __awaiter(void 0, void 0, void 
         idColumns: ["erpid"],
         nameColumns: ["name", "full_name"],
         passwordColumns: ["password_hash", "password"],
+        allowedRoleValues: ["faculty", "Faculty"],
     }, erpId, password);
 });
 exports.authenticateFaculty = authenticateFaculty;

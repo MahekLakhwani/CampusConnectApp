@@ -36,11 +36,18 @@ type GatePassFormData = {
 };
 
 type Props = {
+  apiBaseUrl: string;
+  token?: string;
   teacherId?: string;
   teacherName?: string;
 };
 
-export default function GatePassRequestComponent({ teacherId, teacherName }: Props) {
+export default function GatePassRequestComponent({
+  apiBaseUrl,
+  token,
+  teacherId,
+  teacherName,
+}: Props) {
   const [formData, setFormData] = useState<GatePassFormData>({
     name: '',
     persons: '',
@@ -151,7 +158,7 @@ export default function GatePassRequestComponent({ teacherId, teacherName }: Pro
     return true;
   };
 
-  const generateQRCode = () => {
+  const generateQRCode = async () => {
     if (!validateForm()) {
       return;
     }
@@ -159,20 +166,39 @@ export default function GatePassRequestComponent({ teacherId, teacherName }: Pro
     setIsGenerating(true);
 
     try {
-      const qrPayload = {
-        teacher_id: teacherId || 'N/A',
-        teacher_name: teacherName || 'Unknown',
-        parent_name: formData.name,
-        num_persons: formData.persons,
-        date: formData.date,
-        time: formData.time,
-        phone: formData.phone,
-        email: formData.email || 'N/A',
-        reason: formData.reason,
-        generated_at: new Date().toISOString(),
-      };
+      if (!token) {
+        Alert.alert('Authentication Error', 'Please login again before generating a gate pass.');
+        return;
+      }
 
-      setQrData(JSON.stringify(qrPayload));
+      const response = await fetch(`${apiBaseUrl}/api/gate-passes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          parent_name: formData.name.trim(),
+          num_persons: Number.parseInt(formData.persons, 10),
+          visit_date: formData.date,
+          visit_time: formData.time,
+          phone: formData.phone.trim(),
+          email: formData.email.trim(),
+          reason: formData.reason.trim(),
+        }),
+      });
+
+      const payload = (await response.json()) as
+        | { success: true; qrPayload: string }
+        | { error?: string };
+
+      if (!response.ok || !('qrPayload' in payload)) {
+        const errorMessage = 'error' in payload ? payload.error : undefined;
+        Alert.alert('Error', errorMessage ?? 'Failed to create gate pass.');
+        return;
+      }
+
+      setQrData(payload.qrPayload);
       setShowQR(true);
       Alert.alert('Success', 'QR Code generated successfully!');
     } catch (error) {
@@ -375,12 +401,7 @@ export default function GatePassRequestComponent({ teacherId, teacherName }: Pro
           <Text style={styles.qrInfo}>Share this QR code with {formData.name}</Text>
 
           <View ref={qrRef} collapsable={false} style={styles.qrCodeContainer}>
-            <QRCode
-              value={qrData}
-              size={200}
-              color={PRIMARY}
-              backgroundColor={BACKGROUND}
-            />
+            <QRCode value={qrData} size={200} color={PRIMARY} backgroundColor={BACKGROUND} />
           </View>
 
           <View style={styles.qrDetails}>

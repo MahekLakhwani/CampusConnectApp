@@ -1,106 +1,537 @@
-import { Link } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useAuth } from '../../context/AuthContext';
 
+type GatePassRecord = {
+  id: string;
+  parent_name: string;
+  visit_time: string;
+  reason: string;
+  phone: string;
+  qr_scanned: number;
+  in_time: string | null;
+  out_time: string | null;
+};
+
 export default function GuardScanScreen() {
-  const { session, signOut } = useAuth();
+  const { apiBaseUrl, session, signOut } = useAuth();
+  const [activeTab, setActiveTab] = useState<'PENDING' | 'CHECKED_IN'>('PENDING');
+  const [gatePasses, setGatePasses] = useState<GatePassRecord[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [scanning, setScanning] = useState(false);
+
+  const fetchGatePasses = async (isRefresh = false) => {
+    if (!session?.token) {
+      return;
+    }
+
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/gate-passes`, {
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+        },
+      });
+
+      const payload = (await response.json()) as
+        | { gatePasses: GatePassRecord[] }
+        | { error?: string };
+
+      if (!response.ok || !('gatePasses' in payload)) {
+        const errorMessage = 'error' in payload ? payload.error : undefined;
+        throw new Error(errorMessage ?? 'Failed to load gate passes.');
+      }
+
+      setGatePasses(payload.gatePasses);
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to load gate passes.');
+    } finally {
+      if (isRefresh) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchGatePasses();
+  }, [apiBaseUrl, session?.token]);
+
+  const filteredVisitors = useMemo(() => {
+    if (activeTab === 'CHECKED_IN') {
+      return gatePasses.filter(item => item.in_time && !item.out_time);
+    }
+
+    return gatePasses.filter(item => !item.in_time || !item.out_time);
+  }, [activeTab, gatePasses]);
+
+  const handleOpenScanner = async () => {
+    if (!cameraPermission?.granted) {
+      const result = await requestCameraPermission();
+      if (!result.granted) {
+        Alert.alert('Permission Required', 'Camera permission is required to scan QR codes.');
+        return;
+      }
+    }
+
+    setScannerOpen(true);
+  };
+
+  const handleScan = async (rawValue: string) => {
+    if (!session?.token || scanning) {
+      return;
+    }
+
+    setScanning(true);
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/gate-passes/scan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.token}`,
+        },
+        body: JSON.stringify({ qrValue: rawValue }),
+      });
+
+      const payload = (await response.json()) as
+        | { success: true; gatePass: GatePassRecord }
+        | { error?: string };
+
+      if (!response.ok || !('gatePass' in payload)) {
+        const errorMessage = 'error' in payload ? payload.error : undefined;
+        throw new Error(errorMessage ?? 'Unable to scan QR code.');
+      }
+
+      Alert.alert('Scanned', `QR verified for ${payload.gatePass.parent_name}.`);
+      setScannerOpen(false);
+      await fetchGatePasses(true);
+    } catch (error) {
+      Alert.alert('Scan Failed', error instanceof Error ? error.message : 'Unable to scan QR code.');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const updateGatePassTime = async (id: string, type: 'mark-in' | 'mark-out') => {
+    if (!session?.token) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/gate-passes/${id}/${type}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+        },
+      });
+
+      const payload = (await response.json()) as
+        | { success: true; gatePass: GatePassRecord }
+        | { error?: string };
+
+      if (!response.ok || !('gatePass' in payload)) {
+        const errorMessage = 'error' in payload ? payload.error : undefined;
+        throw new Error(errorMessage ?? 'Failed to update gate pass.');
+      }
+
+      await fetchGatePasses(true);
+    } catch (error) {
+      Alert.alert('Update Failed', error instanceof Error ? error.message : 'Failed to update gate pass.');
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.card}>
-        <Text style={styles.eyebrow}>Guard Portal</Text>
-        <Text style={styles.title}>Welcome, {session?.user.name ?? 'Guard'}</Text>
-        <Text style={styles.subtitle}>
-          This screen is ready for your guard-specific scan workflow.
-        </Text>
-
-        <View style={styles.panel}>
-          <Text style={styles.panelLabel}>Signed in as</Text>
-          <Text style={styles.panelValue}>{session?.user.erpId ?? '--'}</Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={() => fetchGatePasses(true)} />
+      }
+    >
+      <View style={styles.header}>
+        <View style={styles.headerAvatar}>
+          <Ionicons name="person" size={20} color="#94a3b8" />
         </View>
-
-        <Link href={'/(guard)/history' as never} asChild>
-          <TouchableOpacity style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>Open Guard History</Text>
-          </TouchableOpacity>
-        </Link>
-
-        <TouchableOpacity style={styles.secondaryButton} onPress={signOut}>
-          <Text style={styles.secondaryButtonText}>Logout</Text>
+        <View style={styles.headerText}>
+          <Text style={styles.headerEyebrow}>Guard Portal</Text>
+          <Text style={styles.headerTitle}>{session?.user.name ?? 'Guard'}</Text>
+        </View>
+        <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
+          <Ionicons name="log-out-outline" size={22} color="#e09c15" />
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+
+      <View style={styles.scannerSection}>
+        <TouchableOpacity style={styles.scannerPlaceholder} activeOpacity={0.9} onPress={handleOpenScanner}>
+          <Ionicons name="scan-outline" size={120} color="#e09c15" />
+        </TouchableOpacity>
+        <Text style={styles.scanTitle}>SCAN VISITOR QR CODE</Text>
+        <Text style={styles.scanSubtitle}>Tap the scanner area to open camera scanning</Text>
+      </View>
+
+      <View style={styles.logTabsContainer}>
+        <TouchableOpacity
+          style={[styles.logTab, activeTab === 'PENDING' && styles.logTabActive]}
+          onPress={() => setActiveTab('PENDING')}
+        >
+          <Text style={[styles.logTabText, activeTab === 'PENDING' && styles.logTabTextActive]}>
+            PENDING
+          </Text>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>
+              {gatePasses.filter(item => !item.in_time || !item.out_time).length}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.logTab, activeTab === 'CHECKED_IN' && styles.logTabActive]}
+          onPress={() => setActiveTab('CHECKED_IN')}
+        >
+          <Text style={[styles.logTabText, activeTab === 'CHECKED_IN' && styles.logTabTextActive]}>
+            CHECKED IN
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.listContainer}>
+        {loading ? (
+          <View style={styles.loaderWrap}>
+            <ActivityIndicator size="large" color="#7f1d1d" />
+          </View>
+        ) : filteredVisitors.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateTitle}>No gate passes found</Text>
+            <Text style={styles.emptyStateText}>New faculty-generated passes will appear here.</Text>
+          </View>
+        ) : filteredVisitors.map(visitor => (
+          <View style={styles.listItem} key={visitor.id}>
+            <View style={styles.listItemLeft}>
+              <Text style={styles.visitorName}>{visitor.parent_name}</Text>
+              <View style={styles.timeContainer}>
+                <Ionicons name="time-outline" size={14} color="#64748b" style={styles.timeIcon} />
+                <Text style={styles.visitorTime}>{visitor.visit_time}</Text>
+              </View>
+              <Text style={styles.visitorPurpose}>PURPOSE: {visitor.reason}</Text>
+              <Text style={styles.metaText}>Phone: {visitor.phone}</Text>
+              <Text style={styles.metaText}>
+                QR: {visitor.qr_scanned ? 'Scanned' : 'Pending'} | IN: {visitor.in_time ? 'Marked' : 'Pending'} | OUT: {visitor.out_time ? 'Marked' : 'Pending'}
+              </Text>
+            </View>
+            <View style={styles.actionColumn}>
+              <TouchableOpacity
+                style={[styles.actionButton, !visitor.qr_scanned && styles.actionButtonDisabled]}
+                disabled={!visitor.qr_scanned || Boolean(visitor.in_time)}
+                onPress={() => updateGatePassTime(visitor.id, 'mark-in')}
+              >
+                <Text style={styles.actionButtonText}>IN</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, !visitor.in_time && styles.actionButtonDisabled]}
+                disabled={!visitor.in_time || Boolean(visitor.out_time)}
+                onPress={() => updateGatePassTime(visitor.id, 'mark-out')}
+              >
+                <Text style={styles.actionButtonText}>OUT</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.logCard}>
+        <Text style={styles.logTitle}>Daily Log</Text>
+        <Text style={styles.logText}>{gatePasses.length} Visitors Logged Today</Text>
+      </View>
+
+      <Modal visible={scannerOpen} animationType="slide" onRequestClose={() => setScannerOpen(false)}>
+        <View style={styles.modalScreen}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Scan Gate Pass</Text>
+            <TouchableOpacity onPress={() => setScannerOpen(false)}>
+              <Ionicons name="close" size={28} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+
+          {cameraPermission?.granted ? (
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              onBarcodeScanned={({ data }) => handleScan(data)}
+            />
+          ) : (
+            <View style={styles.permissionState}>
+              <Text style={styles.permissionText}>Camera permission is required.</Text>
+            </View>
+          )}
+        </View>
+      </Modal>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
-    padding: 20,
+    backgroundColor: '#ffffff',
   },
-  card: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    borderRadius: 28,
-    padding: 24,
+  contentContainer: {
+    paddingBottom: 40,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#450a0a',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  headerAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#1e293b',
     justifyContent: 'center',
-    gap: 16,
+    alignItems: 'center',
+    marginRight: 10,
   },
-  eyebrow: {
-    color: '#f59e0b',
-    fontSize: 12,
+  headerText: {
+    flex: 1,
+  },
+  headerEyebrow: {
+    color: '#fca5a5',
+    fontSize: 11,
     fontWeight: '700',
-    textTransform: 'uppercase',
     letterSpacing: 1,
+    textTransform: 'uppercase',
   },
-  title: {
-    color: '#f8fafc',
-    fontSize: 28,
+  headerTitle: {
+    color: '#e09c15',
+    fontSize: 18,
     fontWeight: '800',
   },
-  subtitle: {
-    color: '#cbd5e1',
-    fontSize: 15,
-    lineHeight: 22,
+  logoutButton: {
+    padding: 6,
   },
-  panel: {
-    backgroundColor: '#1e293b',
-    borderRadius: 18,
+  scannerSection: {
+    alignItems: 'center',
+    paddingVertical: 30,
+  },
+  scannerPlaceholder: {
+    width: 280,
+    height: 280,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+  },
+  scanTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  scanSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  logTabsContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    marginBottom: 16,
+  },
+  logTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  logTabActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#e09c15',
+  },
+  logTabText: {
+    fontSize: 13,
+    color: '#94a3b8',
+    fontWeight: '600',
+  },
+  logTabTextActive: {
+    color: '#e09c15',
+  },
+  badge: {
+    backgroundColor: '#e09c15',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  listContainer: {
+    paddingHorizontal: 16,
+  },
+  loaderWrap: {
+    paddingVertical: 30,
+    alignItems: 'center',
+  },
+  emptyState: {
+    backgroundColor: '#fff7ed',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
     padding: 16,
   },
-  panelLabel: {
-    color: '#94a3b8',
-    fontSize: 12,
+  emptyStateTitle: {
+    color: '#7f1d1d',
+    fontSize: 16,
+    fontWeight: '700',
     marginBottom: 6,
   },
-  panelValue: {
-    color: '#f8fafc',
-    fontSize: 18,
-    fontWeight: '700',
+  emptyStateText: {
+    color: '#7c2d12',
+    fontSize: 13,
   },
-  primaryButton: {
-    backgroundColor: '#f59e0b',
-    borderRadius: 16,
-    paddingVertical: 15,
+  listItem: {
+    flexDirection: 'row',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    marginBottom: 12,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#e09c15',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  listItemLeft: {
+    flex: 1,
+  },
+  visitorName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  timeIcon: {
+    marginRight: 4,
+  },
+  visitorTime: {
+    fontSize: 13,
+    color: '#64748b',
+  },
+  visitorPurpose: {
+    fontSize: 12,
+    color: '#7f1d1d',
+    fontWeight: '500',
+    letterSpacing: 0.5,
+  },
+  metaText: {
+    fontSize: 11,
+    color: '#475569',
+    marginTop: 4,
+  },
+  actionColumn: {
+    gap: 8,
+    marginLeft: 12,
+  },
+  actionButton: {
+    minWidth: 62,
+    borderRadius: 10,
+    backgroundColor: '#7f1d1d',
+    paddingVertical: 10,
     alignItems: 'center',
   },
-  primaryButtonText: {
-    color: '#0f172a',
-    fontSize: 15,
+  actionButtonDisabled: {
+    backgroundColor: '#cbd5e1',
+  },
+  actionButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
     fontWeight: '800',
   },
-  secondaryButton: {
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 16,
-    paddingVertical: 15,
-    alignItems: 'center',
+  logCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: '#450a0a',
+    borderRadius: 12,
+    padding: 24,
   },
-  secondaryButtonText: {
-    color: '#e2e8f0',
-    fontSize: 15,
-    fontWeight: '700',
+  logTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  logText: {
+    color: '#fca5a5',
+    fontSize: 14,
+  },
+  modalScreen: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  modalHeader: {
+    paddingTop: 56,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    backgroundColor: '#450a0a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  camera: {
+    flex: 1,
+  },
+  permissionState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  permissionText: {
+    color: '#ffffff',
+    fontSize: 16,
+    textAlign: 'center',
   },
 });

@@ -12,6 +12,7 @@ export const authenticateFaculty = async (
       idColumns: ["erpid"],
       nameColumns: ["name", "full_name"],
       passwordColumns: ["password_hash", "password"],
+      allowedRoleValues: ["faculty", "Faculty"],
     },
     erpId,
     password,
