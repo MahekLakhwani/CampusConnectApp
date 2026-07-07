@@ -7,12 +7,11 @@ export const authenticateStudent = async (
 ): Promise<AuthUser> =>
   authenticateFromTable(
     {
-      tableName: "users",
+      tableName: "students",
       role: "student",
       idColumns: ["erpid"],
       nameColumns: ["name", "full_name"],
-      passwordColumns: ["password_hash", "password"],
-      allowedRoleValues: ["student", "Student"],
+      passwordColumns: ["password"],
     },
     erpId,
     password,
