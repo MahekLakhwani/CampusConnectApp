@@ -15,12 +15,32 @@ type UserRow = Record<string, unknown> & {
   id?: string | number | null;
 };
 
-const normalizeIdentifier = (value: string): string => value.trim().toUpperCase();
+const coerceStringValue = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return null;
+};
+
+const normalizeIdentifier = (value: unknown): string => {
+  const normalized = coerceStringValue(value);
+  return normalized ? normalized.trim().toUpperCase() : "";
+};
 
 const resolveFirstString = (row: UserRow, keys: string[]): string => {
   for (const key of keys) {
-    const value = row[key];
-    if (typeof value === "string" && value.trim()) {
+    const value = coerceStringValue(row[key]);
+    if (value) {
       return value.trim();
     }
   }
@@ -62,23 +82,11 @@ export const authenticateFromTable = async (
 ): Promise<AuthUser> => {
   const normalizedErpId = normalizeIdentifier(erpId);
 
-  const queryResults = await Promise.all(
-    config.idColumns.map(async columnName => {
-      const { data, error } = await supabase
-        .from(config.tableName)
-        .select("*")
-        .ilike(columnName, normalizedErpId)
-        .limit(50);
+  const { data, error } = await supabase.from(config.tableName).select("*").limit(1000);
 
-      if (error) {
-        throw error;
-      }
-
-      return data ?? [];
-    }),
-  );
-
-  const data = queryResults.flat();
+  if (error) {
+    throw error;
+  }
 
   const matchingRow = (data ?? []).find((row) => {
     const rowErpId = resolveFirstString(row as UserRow, config.idColumns);

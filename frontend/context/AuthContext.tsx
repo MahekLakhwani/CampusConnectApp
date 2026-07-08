@@ -24,7 +24,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
-  const apiBaseUrl = 'https://campusconnectapp-lu1d.onrender.com';
+  const apiBaseUrl = 'http://localhost:5000'; // Replace with your actual API base URL
 
   useEffect(() => {
     const bootstrap = async () => {

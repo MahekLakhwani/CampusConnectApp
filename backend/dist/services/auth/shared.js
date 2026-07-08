@@ -15,11 +15,27 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.authenticateFromTable = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const supabase_1 = require("../supabase");
-const normalizeIdentifier = (value) => value.trim().toUpperCase();
+const coerceStringValue = (value) => {
+    if (value === null || value === undefined) {
+        return null;
+    }
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        return trimmed ? trimmed : null;
+    }
+    if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean") {
+        return String(value);
+    }
+    return null;
+};
+const normalizeIdentifier = (value) => {
+    const normalized = coerceStringValue(value);
+    return normalized ? normalized.trim().toUpperCase() : "";
+};
 const resolveFirstString = (row, keys) => {
     for (const key of keys) {
-        const value = row[key];
-        if (typeof value === "string" && value.trim()) {
+        const value = coerceStringValue(row[key]);
+        if (value) {
             return value.trim();
         }
     }
@@ -46,18 +62,10 @@ const comparePassword = (password, storedValue) => __awaiter(void 0, void 0, voi
 });
 const authenticateFromTable = (config, erpId, password) => __awaiter(void 0, void 0, void 0, function* () {
     const normalizedErpId = normalizeIdentifier(erpId);
-    const queryResults = yield Promise.all(config.idColumns.map((columnName) => __awaiter(void 0, void 0, void 0, function* () {
-        const { data, error } = yield supabase_1.supabase
-            .from(config.tableName)
-            .select("*")
-            .ilike(columnName, normalizedErpId)
-            .limit(50);
-        if (error) {
-            throw error;
-        }
-        return data !== null && data !== void 0 ? data : [];
-    })));
-    const data = queryResults.flat();
+    const { data, error } = yield supabase_1.supabase.from(config.tableName).select("*").limit(1000);
+    if (error) {
+        throw error;
+    }
     const matchingRow = (data !== null && data !== void 0 ? data : []).find((row) => {
         var _a;
         const rowErpId = resolveFirstString(row, config.idColumns);

@@ -13,12 +13,11 @@ exports.authenticateStudent = void 0;
 const shared_1 = require("./shared");
 const authenticateStudent = (erpId, password) => __awaiter(void 0, void 0, void 0, function* () {
     return (0, shared_1.authenticateFromTable)({
-        tableName: "users",
+        tableName: "students",
         role: "student",
         idColumns: ["erpid"],
         nameColumns: ["name", "full_name"],
-        passwordColumns: ["password_hash", "password"],
-        allowedRoleValues: ["student", "Student"],
+        passwordColumns: ["password"],
     }, erpId, password);
 });
 exports.authenticateStudent = authenticateStudent;

@@ -3,6 +3,7 @@ import AuthService, { loginWithErpCredentials } from "../services/authService";
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
+    console.log(req.body);
     console.log("[auth/login] request received", {
       erpId: req.body?.erpId,
       role: req.body?.role,
