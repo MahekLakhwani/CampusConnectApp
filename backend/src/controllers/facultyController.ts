@@ -76,8 +76,6 @@ export const triggerFacultyNotification = async (req: Request, res: Response): P
   }
 };
 
-//function to insert the session into the database
-
 export const insertSession = async (
   req: Request,
   res: Response
@@ -85,22 +83,35 @@ export const insertSession = async (
   try {
     console.log("Route hit");
 
-    const payload = req.body;
+    const {images, ...payload} = req.body;
+    const files = req.files as Express.Multer.File[];
+
+    console.log("Payload:", payload);
+    console.log("Files:", files);
+
     const facultyErpid = req.authUser!.erpId;
-    console.log("facultyErpid", facultyErpid);
 
-    console.log("[faculty/session/insert] request payload", payload);
+    const session = await FacultyService.sessionStart(payload, facultyErpid);
 
-    const session = await FacultyService.sessionStart(payload, facultyErpid!);
+    console.log(files.length, "files uploaded");
 
-    console.log(session);
+    // Upload files to Cloudinary here
+    if (files && files.length > 0) {
+      for (const file of files) {
+        console.log(file.originalname);
+        console.log(file.mimetype);
+        console.log(file.size);
+        console.log(file.buffer); // This is what you'll upload
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: "Session created successfully",
       data: session,
     });
   } catch (error: any) {
-    console.error("[faculty/session/insert] failed", error);
+    console.error(error);
 
     res.status(500).json({
       success: false,

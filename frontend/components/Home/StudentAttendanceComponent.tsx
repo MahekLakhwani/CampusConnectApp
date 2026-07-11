@@ -407,25 +407,64 @@ const onChangeEndTime = (_event: any, selectedDate?: Date) => {
       window.alert('Submit clicked. Check the browser console for the payload.');
     }
 
-    const token = await AsyncStorage.getItem("token");
-
     try {
-      const res = await fetch("http://localhost:5000/api/faculty/insert-session", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json',Authorization: `Bearer ${token}`},
-        body: JSON.stringify(payload),
+      const token = await AsyncStorage.getItem("token");
+
+      const formData = new FormData();
+
+      // Append all payload fields
+      Object.entries(payload).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          formData.append(key, String(value));
+        }
       });
+
+      // Append images
+      Object.values(photos).forEach((photo, index) => {
+        if (photo.url) {
+          formData.append("images", {
+            uri: photo.url,
+            name: `photo-${index + 1}.jpg`,
+            type: "image/jpeg",
+          } as any);
+        }
+      });
+
+      for (const [key, value] of (formData as any)._parts) {
+        console.log(key, value);
+      }
+
+      const res = await fetch(
+        "http://localhost:5000/api/faculty/insert-session",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
+
       const resJson = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        Alert.alert('Error', resJson?.message || `Submit failed (${res.status})`);
+        Alert.alert(
+          "Error",
+          resJson?.message || `Submit failed (${res.status})`
+        );
         return;
       }
 
-      Alert.alert('Success', resJson?.message || 'Form submitted!');
+      Alert.alert(
+        "Success",
+        resJson?.message || "Form submitted successfully!"
+      );
     } catch (err) {
       console.log(err);
-      Alert.alert('Network error', err instanceof Error ? err.message : 'Please try again.');
+      Alert.alert(
+        "Network Error",
+        err instanceof Error ? err.message : "Please try again."
+      );
     }
   };
 
