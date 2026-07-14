@@ -10,8 +10,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.triggerNotification = exports.saveToken = void 0;
-const supabase_1 = require("../services/supabase");
-const firebaseAdmin_1 = require("../services/firebaseAdmin");
+const supabase_1 = require("../config/supabase");
+const firebaseAdmin_1 = require("../config/firebaseAdmin");
 const saveToken = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { erpid, token } = req.body;
